@@ -1,0 +1,38 @@
+# Firebase config — generated per project via flutterfire configure
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+
+# Environment secrets
+functions/.env
+functions/.env.*
+.env
+*.env
+
+# Build artifacts
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Dependencies
+functions/node_modules/
+node_modules/
+.packages
+
+# Firebase local
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+*.local
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# macOS
+.DS_Store
+extensions/

@@ -1,0 +1,33 @@
+{
+  "name": "langreels-cloud-functions",
+  "version": "1.0.0",
+  "description": "AI-powered language learning platform backend functions",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "lint": "eslint --ext .js .",
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.682.0",
+    "@aws-sdk/client-transcribe": "^3.682.0",
+    "@google-cloud/storage": "^7.16.0",
+    "@google-cloud/translate": "^9.1.0",
+    "@google-cloud/video-intelligence": "^6.1.0",
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^4.9.0",
+    "nodemailer": "^7.0.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "firebase-functions-test": "^3.4.1",
+    "jest": "^29.5.0"
+  }
+}

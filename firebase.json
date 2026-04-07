@@ -1,0 +1,54 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "YOUR_FIREBASE_PROJECT_ID",
+          "appId": "YOUR_ANDROID_APP_ID",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "YOUR_FIREBASE_PROJECT_ID",
+          "appId": "YOUR_IOS_APP_ID",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "YOUR_FIREBASE_PROJECT_ID",
+          "configurations": {
+            "android": "YOUR_ANDROID_APP_ID",
+            "ios": "YOUR_IOS_APP_ID"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": []
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "extensions": {
+    "firestore-send-email": "firebase/firestore-send-email@0.2.4"
+  }
+}

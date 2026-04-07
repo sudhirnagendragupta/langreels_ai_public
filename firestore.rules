@@ -1,0 +1,52 @@
+// Firestore Security Rules (for Firebase Console)
+// Go to: Firebase Console > Firestore Database > Rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - users can read/write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow reading public user profiles (for display purposes)
+      allow read: if request.auth != null;
+    }
+    
+    // Reels collection - authenticated users can read all, write their own
+    match /reels/{reelId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && 
+        request.auth.uid == resource.data.authorId;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.authorId;
+    }
+    
+    // Comments collection - authenticated users can read all, write their own
+    match /comments/{commentId} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null && 
+        request.auth.uid == resource.data.authorId;
+      allow delete: if request.auth != null && 
+        request.auth.uid == resource.data.authorId;
+    }
+    
+    // Processing status collection - users can read their own processing status
+    match /processing/{docId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+    }
+    
+    // Translation results - authenticated users can read
+    match /translations/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Only Cloud Functions should write here
+    }
+    
+    // Development rules - REMOVE IN PRODUCTION
+    // Uncomment below for testing without authentication
+    // match /{document=**} {
+    //   allow read, write: if true;
+    // }
+  }
+}
