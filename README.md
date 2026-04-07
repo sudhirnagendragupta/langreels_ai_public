@@ -16,6 +16,16 @@
 
 ---
 
+## The problem
+
+Language learning apps are built around structured curricula — flashcards, grammar drills, vocabulary lists. These build foundational knowledge but fail at the thing that actually makes people fluent: exposure to natural, unscripted language used in real cultural contexts.
+
+Authentic content from native speakers is the missing ingredient. But it's hard to learn from — too fast, no subtitles, no way to pause on a specific phrase and study it.
+
+**LangReels removes that friction.** Creators record natural videos in their own language. The AI pipeline handles everything else — turning unedited speech into structured, navigable learning content across 15 languages in under 3 minutes.
+
+---
+
 ## Screenshots
 
 <table>
