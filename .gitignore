@@ -8,6 +8,7 @@ functions/.env
 functions/.env.*
 .env
 *.env
+!functions/.env.example
 
 # Build artifacts
 build/

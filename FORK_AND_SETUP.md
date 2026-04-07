@@ -1,6 +1,6 @@
 # 🍴 Fork & Setup Guide
 
-This guide walks you through everything needed to run your own instance of LangReels AI. The app uses Firebase (Flutter + Cloud Functions), OpenAI, Google Cloud Translate, and AWS Transcribe — you'll need accounts for each.
+This guide walks you through everything needed to run your own instance of LangReels AI. The app uses Firebase (Flutter + Cloud Functions), Google Cloud Translation + Video Intelligence, and AWS Transcribe — you'll need accounts for each.
 
 ---
 
@@ -67,44 +67,34 @@ The FlutterFire CLI will prompt you to select your project and will automaticall
 
 ---
 
-## Step 5 — Set up OpenAI
+## Step 5 — Set up AWS (Transcribe + S3 + SNS + EventBridge)
 
-1. Create an account at [https://platform.openai.com](https://platform.openai.com).
-2. Go to **API Keys** and create a new secret key.
-3. Copy the key — you'll need it in Step 7.
+The transcription pipeline uses four AWS services wired together. **Important:** complete Steps 6 and 7 (configure + deploy Cloud Functions) before finishing Step 5.3 — you need the deployed webhook URL before creating the SNS subscription.
 
-> LangReels uses AWS Transcribe for speech-to-text. No OpenAI key is required.
-
----
-
-## Step 6 — Set up AWS (Transcribe + S3 + SNS + EventBridge)
-
-The transcription pipeline uses four AWS services wired together. **Important:** complete Steps 7 and 8 (deploy Cloud Functions) before finishing Step 6.3 — you need the deployed webhook URL before creating the SNS subscription.
-
-**6.1 Create an S3 bucket**
+**5.1 Create an S3 bucket**
 
 - Go to S3 → Create bucket
 - Choose a unique name (e.g. `my-langreels-transcribe`)
 - Select your preferred region (e.g. `us-east-1`)
 - Block all public access; keep all other defaults
 
-**6.2 Create an IAM user**
+**5.2 Create an IAM user**
 
 - Go to IAM → Users → Create user
 - Attach policies: `AmazonTranscribeFullAccess` + `AmazonS3FullAccess` + `AmazonSNSFullAccess`
 - Security credentials → Create access key → copy the **Access Key ID** and **Secret Access Key**
 
-**6.3 Create an SNS topic and subscription** _(complete after Step 8)_
+**5.3 Create an SNS topic and subscription** _(complete after Step 7)_
 
 - Go to SNS → Topics → Create topic → select **Standard**
 - Name it (e.g. `my-langreels-transcribe-notifications`)
 - Once created, go to Subscriptions → Create subscription:
   - Protocol: **HTTPS**
-  - Endpoint: your `handleTranscribeWebhook` Cloud Function URL (from `firebase functions:list` after Step 8)
+  - Endpoint: your `handleTranscribeWebhook` Cloud Function URL (from `firebase functions:list` after Step 7)
 - AWS immediately sends a `SubscriptionConfirmation` POST — the function handles this automatically and status changes from `PendingConfirmation` to **Confirmed** within seconds
 - Verify status shows **Confirmed** before proceeding
 
-**6.4 Create an EventBridge rule**
+**5.4 Create an EventBridge rule**
 
 - Go to EventBridge → Rules → Create rule
 - Name it something descriptive (e.g. `trigger-webhook-on-transcribe-complete`)
@@ -119,12 +109,12 @@ The transcription pipeline uses four AWS services wired together. **Important:**
     }
   }
   ```
-- Target: **SNS topic** → select the topic you created in step 6.3
+- Target: **SNS topic** → select the topic you created in step 5.3
 - This rule fires whenever any Transcribe job in your account reaches `COMPLETED` or `FAILED` — the webhook looks up the job name in Firestore to find the corresponding reel
 
 ---
 
-## Step 7 — Configure Cloud Functions environment
+## Step 6 — Configure Cloud Functions environment
 
 Copy the example env file and fill in your values:
 
@@ -147,7 +137,7 @@ AWS_S3_BUCKET=my-langreels-transcribe       # The S3 bucket name you created
 
 ---
 
-## Step 8 — Deploy Cloud Functions
+## Step 7 — Deploy Cloud Functions
 
 ```bash
 cd functions
@@ -174,7 +164,7 @@ You should see a JSON response confirming all services are connected.
 
 ---
 
-## Step 9 — Deploy Firestore rules and indexes
+## Step 8 — Deploy Firestore rules and indexes
 
 ```bash
 firebase deploy --only firestore
@@ -183,7 +173,7 @@ firebase deploy --only storage
 
 ---
 
-## Step 10 — Run the app
+## Step 9 — Run the app
 
 ```bash
 cd ..   # back to repo root
@@ -238,7 +228,6 @@ firebase functions:log
 
 | Service                  | Usage               | Approx. cost                 |
 | ------------------------ | ------------------- | ---------------------------- |
-| OpenAI Whisper           | Per minute of audio | ~$0.006/min                  |
 | Google Cloud Translation | Per character       | ~$20 per 1M chars            |
 | AWS Transcribe           | Per minute of audio | ~$0.024/min                  |
 | AWS S3                   | Storage + requests  | < $1/month at small scale    |
