@@ -131,6 +131,12 @@ AWS_ACCESS_KEY_ID=AKIA...                   # From IAM user you created
 AWS_SECRET_ACCESS_KEY=...                   # From IAM user you created
 AWS_REGION=us-east-1                        # Must match your S3 bucket region
 AWS_S3_BUCKET=my-langreels-transcribe       # The S3 bucket name you created
+
+# Email configuration (Nodemailer / Resend SMTP)
+SMTP_CONNECTION_URI=smtps://resend:re_...   # Your SMTP connection URI
+DEFAULT_FROM=LangReels <noreply@yourdomain.com>
+DEFAULT_REPLY_TO=support@yourdomain.com
+ADMIN_EMAIL=admin@yourdomain.com            # Destination for bug reports and feedback
 ```
 
 > ⚠️ Never commit `.env` — it's listed in `.gitignore`.

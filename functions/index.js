@@ -17,6 +17,7 @@ const videoIntelligence = require('@google-cloud/video-intelligence');
 const { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand, DeleteTranscriptionJobCommand } = require('@aws-sdk/client-transcribe');
 const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -1007,68 +1008,209 @@ exports.healthCheck = onCall(
         }
     });
 
-// === BUG REPORTING & FEEDBACK SYSTEM ===
+// === EMAIL SERVICE & QUEUE PROCESSOR ===
 
+let mailTransporter = null;
+
+/**
+ * Lazily initialize and return the nodemailer SMTP transport.
+ */
+function getMailTransporter() {
+    if (!mailTransporter) {
+        if (!process.env.SMTP_CONNECTION_URI) {
+            throw new Error('SMTP_CONNECTION_URI environment variable is not configured');
+        }
+        mailTransporter = nodemailer.createTransport(process.env.SMTP_CONNECTION_URI);
+    }
+    return mailTransporter;
+}
+
+/**
+ * Send an email directly using nodemailer and Resend SMTP transport.
+ */
+async function sendEmail({ to, from, replyTo, cc, bcc, subject, text, html, attachments }) {
+    const transporter = getMailTransporter();
+    const mailOptions = {
+        from: from || process.env.DEFAULT_FROM || 'LangReels <noreply@langreels.ai>',
+        to,
+        replyTo: replyTo || process.env.DEFAULT_REPLY_TO,
+        cc,
+        bcc,
+        subject,
+        text,
+        html,
+        attachments,
+    };
+    return await transporter.sendMail(mailOptions);
+}
+
+/**
+ * Direct bug reporting trigger. Delivers notifications directly via SMTP
+ * without intermediate Firestore writes, setting dynamic Reply-To for 1-click admin response.
+ */
 exports.onBugReport = functions.firestore
     .document('bug_reports/{reportId}')
     .onCreate(async (snap, context) => {
         const data = snap.data();
         const reportId = context.params.reportId;
+        const adminEmail = process.env.ADMIN_EMAIL || process.env.DEFAULT_REPLY_TO;
+
+        if (!adminEmail) {
+            logger.warn(`⚠️ ADMIN_EMAIL / DEFAULT_REPLY_TO is not configured. Cannot send bug report notification for ${reportId}`);
+            return;
+        }
 
         try {
-            await admin.firestore().collection('mail').add({
-                to: 'YOUR_EMAIL_ADDRESS', // REPLACE with your actual email
-                message: {
-                    subject: `🐛 Langreels Bug Report: ${data.title}`,
-                    html: `
+            await sendEmail({
+                to: adminEmail,
+                replyTo: data.userEmail || process.env.DEFAULT_REPLY_TO,
+                subject: `🐛 Langreels Bug Report: ${data.title || 'Untitled'}`,
+                html: `
             <h2>New Bug Report</h2>
-            <p><strong>From:</strong> ${data.userName} (${data.userEmail})</p>
-            <p><strong>Platform:</strong> ${data.platform}</p>
-            <p><strong>App Version:</strong> ${data.appVersion}</p>
-            <p><strong>Title:</strong> ${data.title}</p>
+            <p><strong>From:</strong> ${data.userName || 'Anonymous'} (${data.userEmail || 'No email'})</p>
+            <p><strong>Platform:</strong> ${data.platform || 'Unknown'}</p>
+            <p><strong>App Version:</strong> ${data.appVersion || 'Unknown'}</p>
+            <p><strong>Title:</strong> ${data.title || 'Untitled'}</p>
             <p><strong>Description:</strong></p>
-            <p>${data.description}</p>
+            <p>${data.description || 'No description provided.'}</p>
             <hr>
             <p><a href="https://console.firebase.google.com/project/${process.env.GCLOUD_PROJECT}/firestore/data/bug_reports/${reportId}">
               View in Firebase Console
             </a></p>
           `,
-                }
             });
 
-            logger.log(`✅ Bug report email sent for ${reportId}`);
+            logger.log(`✅ Bug report email sent directly for ${reportId}`);
         } catch (error) {
-            logger.error(`❌ Failed to send bug report email:`, error);
+            logger.error(`❌ Failed to send bug report email for ${reportId}:`, error);
         }
     });
 
+/**
+ * Direct user feedback trigger. Delivers notifications directly via SMTP
+ * with dynamic Reply-To populated with the submitter's email address.
+ */
 exports.onFeedback = functions.firestore
     .document('feedback/{feedbackId}')
     .onCreate(async (snap, context) => {
         const data = snap.data();
         const feedbackId = context.params.feedbackId;
+        const adminEmail = process.env.ADMIN_EMAIL || process.env.DEFAULT_REPLY_TO;
+
+        if (!adminEmail) {
+            logger.warn(`⚠️ ADMIN_EMAIL / DEFAULT_REPLY_TO is not configured. Cannot send feedback notification for ${feedbackId}`);
+            return;
+        }
 
         try {
-            await admin.firestore().collection('mail').add({
-                to: 'YOUR_EMAIL_ADDRESS', // REPLACE with your actual email
-                message: {
-                    subject: `💬 Langreels Feedback [${data.category}]`,
-                    html: `
+            await sendEmail({
+                to: adminEmail,
+                replyTo: data.userEmail || process.env.DEFAULT_REPLY_TO,
+                subject: `💬 Langreels Feedback [${data.category || 'General'}]`,
+                html: `
             <h2>User Feedback</h2>
-            <p><strong>Category:</strong> ${data.category}</p>
-            <p><strong>From:</strong> ${data.userName} (${data.userEmail})</p>
+            <p><strong>Category:</strong> ${data.category || 'General'}</p>
+            <p><strong>From:</strong> ${data.userName || 'Anonymous'} (${data.userEmail || 'No email'})</p>
             <p><strong>Message:</strong></p>
-            <p>${data.message}</p>
+            <p>${data.message || 'No message provided.'}</p>
             <hr>
             <p><a href="https://console.firebase.google.com/project/${process.env.GCLOUD_PROJECT}/firestore/data/feedback/${feedbackId}">
               View in Firebase Console
             </a></p>
           `,
-                }
             });
 
-            logger.log(`✅ Feedback email sent for ${feedbackId}`);
+            logger.log(`✅ Feedback email sent directly for ${feedbackId}`);
         } catch (error) {
-            logger.error(`❌ Failed to send feedback email:`, error);
+            logger.error(`❌ Failed to send feedback email for ${feedbackId}:`, error);
+        }
+    });
+
+/**
+ * Backward-compatible queue processor for the 'mail' collection.
+ * Replaces the deprecated 'firestore-send-email' extension while maintaining exact
+ * document schema, recipient resolution, and delivery state flags ('SUCCESS' / 'ERROR').
+ */
+exports.processMailQueue = functions.firestore
+    .document('mail/{mailId}')
+    .onCreate(async (snap, context) => {
+        const data = snap.data();
+        const mailId = context.params.mailId;
+
+        // Skip if already processed or in progress
+        if (data.delivery && (data.delivery.state === 'SUCCESS' || data.delivery.state === 'PENDING')) {
+            logger.log(`Mail document ${mailId} already processed or in progress. Skipping.`);
+            return;
+        }
+
+        const startTime = admin.firestore.Timestamp.now();
+
+        // Mark as PENDING matching legacy extension lifecycle
+        await snap.ref.update({
+            'delivery.state': 'PENDING',
+            'delivery.startTime': startTime,
+            'delivery.attempts': admin.firestore.FieldValue.increment(1),
+        });
+
+        try {
+            // Support both direct 'to' and 'toUids' resolution
+            let recipient = data.to;
+            if (!recipient && Array.isArray(data.toUids) && data.toUids.length > 0) {
+                const userRecords = await Promise.all(
+                    data.toUids.map((uid) => admin.auth().getUser(uid).catch(() => null))
+                );
+                recipient = userRecords.filter((u) => u && u.email).map((u) => u.email);
+            }
+
+            if (!recipient || (Array.isArray(recipient) && recipient.length === 0)) {
+                throw new Error('No recipient email specified in "to" or "toUids".');
+            }
+
+            const message = data.message || {};
+            const subject = message.subject || data.subject || '(No Subject)';
+            const html = message.html || data.html;
+            const text = message.text || data.text;
+            const replyTo = data.replyTo || message.replyTo || process.env.DEFAULT_REPLY_TO;
+            const from = data.from || message.from || process.env.DEFAULT_FROM;
+            const cc = data.cc || message.cc;
+            const bcc = data.bcc || message.bcc;
+            const attachments = data.attachments || message.attachments;
+
+            const info = await sendEmail({
+                to: recipient,
+                from,
+                replyTo,
+                cc,
+                bcc,
+                subject,
+                text,
+                html,
+                attachments,
+            });
+
+            const endTime = admin.firestore.Timestamp.now();
+
+            await snap.ref.update({
+                'delivery.state': 'SUCCESS',
+                'delivery.endTime': endTime,
+                'delivery.error': null,
+                'delivery.info': {
+                    messageId: info.messageId || null,
+                    response: info.response || null,
+                    accepted: info.accepted || [],
+                    rejected: info.rejected || [],
+                },
+            });
+
+            logger.log(`✅ Mail queue document ${mailId} successfully delivered.`);
+        } catch (error) {
+            const endTime = admin.firestore.Timestamp.now();
+            logger.error(`❌ Failed to process mail queue document ${mailId}:`, error);
+
+            await snap.ref.update({
+                'delivery.state': 'ERROR',
+                'delivery.endTime': endTime,
+                'delivery.error': error.message || String(error),
+            });
         }
     });

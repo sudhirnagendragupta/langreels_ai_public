@@ -17,6 +17,7 @@ This document covers the technical architecture of LangReels AI: the service map
 | AWS EventBridge + SNS           | Job-complete callback to Firebase                         | EventBridge rule captures Transcribe events → routes to SNS topic → HTTP POST to webhook |
 | Google Cloud Video Intelligence | Content moderation                                        | Runs in parallel with transcription                                                      |
 | Google Cloud Translation API v3 | Batch sentence translation                                | 14 calls per video (one per non-source language)                                         |
+| Resend SMTP / Nodemailer        | Email delivery for bug reports, feedback, and mail queue  | Replaces deprecated Firebase Extensions with native Cloud Functions SMTP dispatch        |
 
 ---
 
@@ -28,7 +29,7 @@ This document covers the technical architecture of LangReels AI: the service map
 
 ## Cloud Functions
 
-Five functions are deployed. Two trigger automatically; three are callable or HTTP.
+Eight functions are deployed: five for the core media pipeline and diagnostics (two Storage-triggered, one HTTP webhook, two callable), and three Firestore triggers for direct email notifications and mail queue processing.
 
 ### `moderateContent`
 
@@ -82,6 +83,21 @@ Five functions are deployed. Two trigger automatically; three are callable or HT
 - **Trigger:** Callable function
 - **What it does:** Tests connectivity to Firestore, Firebase Storage, Google Translate, and AWS Transcribe. Returns status object and count of pending transcription jobs.
 - **Usage:** `firebase functions:call healthCheck`
+
+### `onBugReport`
+
+- **Trigger:** Firestore `onCreate` on `bug_reports/{reportId}`
+- **What it does:** Sends bug report emails directly to `ADMIN_EMAIL` using Nodemailer and Resend SMTP. Dynamically sets `Reply-To` to the submitter's email address for single-click replies.
+
+### `onFeedback`
+
+- **Trigger:** Firestore `onCreate` on `feedback/{feedbackId}`
+- **What it does:** Delivers categorized user feedback notifications directly to admins via Resend SMTP, with submitter `Reply-To` header.
+
+### `processMailQueue`
+
+- **Trigger:** Firestore `onCreate` on `mail/{mailId}`
+- **What it does:** Backward-compatible background worker replacing the legacy `firestore-send-email` Firebase Extension. Reads email docs from `mail`, resolves recipients (including `toUids`), dispatches via SMTP, and updates `delivery.state` to `SUCCESS` or `ERROR`.
 
 ---
 
